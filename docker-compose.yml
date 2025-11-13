@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: https://github.com/avantikasistemas/backend_verificacion_st.git#master
+      dockerfile: Dockerfile
+    container_name: plan-ventas-backend
+    ports:
+      - "8011:8011"
+    environment:
+      - DRIVER=${DRIVER}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - ENCRYPT=${ENCRYPT}
+      - TRUST_CERTIFICATE=${TRUST_CERTIFICATE}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: https://github.com/avantikasistemas/frontend_verificacion_st.git#master
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://130.1.1.7:8011
+    container_name: plan-ventas-frontend
+    ports:
+      - "5186:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge

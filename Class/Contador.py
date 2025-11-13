@@ -15,36 +15,6 @@ class Contador:
         self.tools = Tools()
         self.querys = Querys(self.db)
 
-    # Función para crear un nuevo año
-    def crear_anio(self, data: dict):
-        """
-        Crea un nuevo año para el plan de ventas.
-        
-        Args:
-            data (dict): {"anio": 2026}
-        """
-        try:
-            anio = data.get("anio")
-
-            if not anio:
-                raise CustomException("El campo 'anio' es requerido")
-
-            # Verificar que el año no exista
-            existe = self.querys.obtener_anio_por_numero(anio)
-            if existe:
-                raise CustomException(f"El año {anio} ya existe en el sistema")
-
-            # Crear año
-            nuevo_anio = self.querys.crear_anio(anio)
-            
-            return self.tools.output(200, f"Año {anio} creado exitosamente", nuevo_anio)
-            
-        except CustomException as e:
-            raise e
-        except Exception as e:
-            print(f"Error al crear año: {e}")
-            raise CustomException(f"Error al crear año: {str(e)}")
-
     # Función para procesar archivo Excel
     def procesar_archivo_excel(self, data: dict):
         """

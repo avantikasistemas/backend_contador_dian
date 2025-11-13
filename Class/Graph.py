@@ -1,10 +1,8 @@
 from Utils.tools import Tools, CustomException
 from Utils.querys import Querys
 import pandas as pd
-import base64
 from io import BytesIO
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-import requests
 import os
 from dotenv import load_dotenv
 
@@ -12,7 +10,7 @@ load_dotenv()
 
 class Graph:
     """
-    Clase para gestionar el envío de correos mediante Microsoft Graph API.
+    Clase para gestionar el envío de correos mediante SMTP.
     """
 
     def __init__(self, db):
@@ -20,44 +18,10 @@ class Graph:
         self.tools = Tools()
         self.querys = Querys(self.db)
         
-        # Credenciales de Microsoft Graph
-        self.client_id = os.getenv('MICROSOFT_CLIENT_ID')
-        self.client_secret = os.getenv('MICROSOFT_CLIENT_SECRET')
-        self.tenant_id = os.getenv('MICROSOFT_TENANT_ID')
-        self.graph_url = os.getenv('MICROSOFT_URL_GRAPH')
-        self.auth_url = os.getenv('MICROSOFT_URL')
-
-    # Función para obtener token de autenticación
-    def obtener_token_graph(self):
-        """
-        Obtiene el token de acceso de Microsoft Graph API.
-        
-        Returns:
-            str: Token de acceso
-        """
-        try:
-            url = f"{self.auth_url}{self.tenant_id}/oauth2/v2.0/token"
-            
-            headers = {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-            
-            data = {
-                'client_id': self.client_id,
-                'client_secret': self.client_secret,
-                'scope': 'https://graph.microsoft.com/.default',
-                'grant_type': 'client_credentials'
-            }
-            
-            response = requests.post(url, headers=headers, data=data)
-            
-            if response.status_code == 200:
-                return response.json().get('access_token')
-            else:
-                raise CustomException(f"Error al obtener token: {response.text}")
-                
-        except Exception as e:
-            raise CustomException(f"Error en autenticación Graph: {str(e)}")
+        # Configuración SMTP
+        self.smtp_server = os.getenv('SMTP_SERVER')
+        self.smtp_port = int(os.getenv('SMTP_PORT', 25))
+        self.smtp_email = os.getenv('SMTP_EMAIL_SEND')
 
     # Función para generar HTML con tablas agrupadas
     def generar_html_tablas(self, datos_dian, datos_dms):
@@ -187,10 +151,10 @@ class Graph:
                 # Aplicar mapeo
                 df_dms_completo['Tipo de documento'] = df_dms_completo['Tipo Docto.'].map(mapeo_tipos).fillna(df_dms_completo['Tipo Docto.'])
                 
-                # Agrupar por Tipo de documento, contar y sumar Saldo2
+                # Agrupar por Tipo de documento, contar valores ÚNICOS de tipo_doc_desc_tipo y sumar Saldo2
                 agrupado_dms = df_dms_completo.groupby('Tipo de documento').agg(
                     Valor=('Saldo2', 'sum'),
-                    Registros=('Saldo2', 'count')
+                    Registros=('tipo_doc_desc_tipo', 'nunique')  # Contar valores únicos
                 ).reset_index()
                 agrupado_dms.columns = ['Tipo de documento', 'Valor', 'N° de registros']
                 
@@ -240,10 +204,10 @@ class Graph:
         except Exception as e:
             raise CustomException(f"Error al generar HTML: {str(e)}")
 
-    # Función para generar Excel de DIAN
-    def generar_excel_adjunto(self, df, nombre_origen):
+    # Función para generar Excel en bytes
+    def generar_excel_adjunto_bytes(self, df, nombre_origen):
         """
-        Genera un archivo Excel con formato para adjuntar al correo.
+        Genera un archivo Excel con formato para adjuntar al correo (devuelve bytes).
         
         Args:
             df: DataFrame con los datos
@@ -289,23 +253,17 @@ class Graph:
                     worksheet.column_dimensions[column_letter].width = adjusted_width
             
             output.seek(0)
-            return base64.b64encode(output.read()).decode('utf-8')
+            return output.read()  # Devolver bytes directamente
             
         except Exception as e:
             raise CustomException(f"Error al generar Excel de {nombre_origen}: {str(e)}")
 
-    # Función para enviar correo
-    def enviar_correo_reporte(self, data: dict):
+    # Función para enviar correo mediante SMTP
+    def enviar_correo_reporte(self):
         """
-        Envía correo con el reporte de facturación electrónica.
-        
-        Args:
-            data (dict): Datos opcionales (por ahora vacío)
+        Envía correo con el reporte de facturación electrónica mediante SMTP.
         """
         try:
-            # Obtener token de autenticación
-            token = self.obtener_token_graph()
-            
             # Obtener últimos datos procesados
             datos = self.querys.obtener_ultimos_datos_procesados()
             
@@ -320,26 +278,26 @@ class Graph:
             
             # Verificar si los totales son diferentes
             totales_diferentes = False
-            adjuntos = []
+            archivos_adjuntos = []
             
             if total_dian != 0 and total_dms != 0:
                 # Comparar con una tolerancia para evitar problemas de precisión de punto flotante
                 if abs(total_dian - total_dms) > 0.01:
                     totales_diferentes = True
                     
-                    # Generar archivos Excel
+                    # Generar archivos Excel en BytesIO (no en base64)
                     if df_dian is not None:
-                        excel_dian_base64 = self.generar_excel_adjunto(df_dian, "DIAN")
-                        adjuntos.append({
+                        excel_dian = self.generar_excel_adjunto_bytes(df_dian, "DIAN")
+                        archivos_adjuntos.append({
                             "nombre": "Datos_DIAN.xlsx",
-                            "contenido": excel_dian_base64
+                            "contenido": excel_dian
                         })
                     
                     if df_dms is not None:
-                        excel_dms_base64 = self.generar_excel_adjunto(df_dms, "DMS")
-                        adjuntos.append({
+                        excel_dms = self.generar_excel_adjunto_bytes(df_dms, "DMS")
+                        archivos_adjuntos.append({
                             "nombre": "Datos_DMS.xlsx",
-                            "contenido": excel_dms_base64
+                            "contenido": excel_dms
                         })
             
             # Preparar el asunto del correo
@@ -347,70 +305,34 @@ class Graph:
             if totales_diferentes:
                 asunto += " ⚠️ DIFERENCIA DETECTADA"
             
-            # Preparar el correo
-            email_data = {
-                "message": {
-                    "subject": asunto,
-                    "body": {
-                        "contentType": "HTML",
-                        "content": html_body
-                    },
-                    "toRecipients": [
-                        {
-                            "emailAddress": {
-                                "address": "sistemas@avantika.com.co"
-                            }
-                        }
-                    ],
-                    "ccRecipients": [
-                        {
-                            "emailAddress": {
-                                "address": "auxiliartic@avantika.com.co"
-                            }
-                        }
-                    ]
-                },
-                "saveToSentItems": "true"
-            }
+            # Configurar destinatarios
+            to_email = "sistemas@avantika.com.co"
+            cc_emails = ["auxiliartic@avantika.com.co"]
             
-            # Agregar adjuntos si existen
-            if adjuntos:
-                email_data["message"]["attachments"] = []
-                for adjunto in adjuntos:
-                    email_data["message"]["attachments"].append({
-                        "@odata.type": "#microsoft.graph.fileAttachment",
-                        "name": adjunto["nombre"],
-                        "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        "contentBytes": adjunto["contenido"]
-                    })
+            # Enviar correo mediante SMTP usando la función de tools
+            self.tools.send_email_individual(
+                to_email=to_email,
+                cc_emails=cc_emails,
+                subject=asunto,
+                body=html_body,
+                mail_sender=self.smtp_email,
+                attachments=archivos_adjuntos if archivos_adjuntos else None
+            )
             
-            # Enviar correo usando Graph API
-            url = f"{self.graph_url}sistemas@avantika.com.co/sendMail"
+            mensaje_respuesta = "Correo enviado exitosamente"
+            if totales_diferentes:
+                mensaje_respuesta += " con archivos Excel adjuntos (diferencia detectada)"
             
-            headers = {
-                'Authorization': f'Bearer {token}',
-                'Content-Type': 'application/json'
-            }
-            
-            response = requests.post(url, json=email_data, headers=headers)
-            
-            if response.status_code == 202:
-                mensaje_respuesta = "Correo enviado exitosamente"
-                if totales_diferentes:
-                    mensaje_respuesta += " con archivos Excel adjuntos (diferencia detectada)"
-                
-                return self.tools.output(200, mensaje_respuesta, {
-                    "destinatarios": ["sistemas@avantika.com.co"],
-                    "copia": ["auxiliartic@avantika.com.co"],
-                    "tiene_datos_dian": datos.get('dian') is not None,
-                    "tiene_datos_dms": datos.get('dms') is not None,
-                    "totales_diferentes": totales_diferentes,
-                    "total_dian": float(total_dian),
-                    "total_dms": float(total_dms),
-                    "archivos_adjuntos": len(adjuntos)
-                })
-            else:
-                raise CustomException(f"Error al enviar correo: {response.status_code} - {response.text}")
+            return self.tools.output(200, mensaje_respuesta, {
+                "destinatarios": [to_email],
+                "copia": cc_emails,
+                "tiene_datos_dian": datos.get('dian') is not None,
+                "tiene_datos_dms": datos.get('dms') is not None,
+                "totales_diferentes": totales_diferentes,
+                "total_dian": float(total_dian),
+                "total_dms": float(total_dms),
+                "archivos_adjuntos": len(archivos_adjuntos)
+            })
             
         except CustomException as e:
             raise e

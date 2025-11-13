@@ -6,14 +6,6 @@ from Config.db import get_db
 
 contador_router = APIRouter()
 
-@contador_router.post('/contador/anios', tags=["Contador"], response_model=dict)
-@http_decorator
-def crear_anio(request: Request, db: Session = Depends(get_db)):
-    """Crea un nuevo año para el plan de ventas. Solo directores."""
-    data = getattr(request.state, "json_data", {})
-    response = Contador(db).crear_anio(data)
-    return response
-
 @contador_router.post('/contador/procesar-archivo', tags=["Contador"], response_model=dict)
 @http_decorator
 def procesar_archivo_excel(request: Request, db: Session = Depends(get_db)):

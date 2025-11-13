@@ -3,16 +3,14 @@
 from fastapi.responses import JSONResponse, Response
 from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
-# from email.mime.multipart import MIMEMultipart
-# from email.mime.text import MIMEText
-# from email.mime.base import MIMEBase
-# from email import encoders
 # import json
 import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
+from email.mime.base import MIMEBase
+from email import encoders
 import pytz
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -119,8 +117,18 @@ class Tools:
         return f"{symbol}{s}"
 
     # Función para enviar correos electrónicos
-    def send_email_individual(self, to_email, cc_emails, subject, body, logo_path=None, mail_sender=None):
-        """Envía un correo electrónico a un destinatario con copia a otros y adjunta un logo si está disponible."""
+    def send_email_individual(self, to_email, cc_emails, subject, body, logo_path=None, mail_sender=None, attachments=None):
+        """Envía un correo electrónico a un destinatario con copia a otros, adjunta un logo si está disponible y archivos adjuntos.
+        
+        Args:
+            to_email (str): Correo del destinatario principal
+            cc_emails (list): Lista de correos en copia
+            subject (str): Asunto del correo
+            body (str): Contenido HTML del correo
+            logo_path (str, optional): Ruta al logo para adjuntar
+            mail_sender (str, optional): Correo del remitente
+            attachments (list, optional): Lista de diccionarios con 'nombre' (str) y 'contenido' (bytes)
+        """
 
         msg = MIMEMultipart()
         msg['From'] = mail_sender
@@ -140,6 +148,18 @@ class Tools:
                     msg.attach(logo)
             except Exception as e:
                 print(f"Error adjuntando el logo: {e}")
+        
+        # Adjuntar archivos si están disponibles
+        if attachments:
+            try:
+                for adjunto in attachments:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(adjunto['contenido'])
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f"attachment; filename={adjunto['nombre']}")
+                    msg.attach(part)
+            except Exception as e:
+                print(f"Error adjuntando archivos: {e}")
         
         try:
             with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:

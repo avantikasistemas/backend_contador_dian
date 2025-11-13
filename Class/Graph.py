@@ -310,8 +310,8 @@ class Graph:
                 asunto += " ⚠️ DIFERENCIA DETECTADA"
             
             # Configurar destinatarios
-            to_email = "sistemas@avantika.com.co"
-            cc_emails = ["auxiliartic@avantika.com.co"]
+            to_email = "contador@avantika.com.co"
+            cc_emails = ["dirfinanciera@avantika.com.co"]
             
             # Enviar correo mediante SMTP usando la función de tools
             self.tools.send_email_individual(

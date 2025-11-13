@@ -21,7 +21,11 @@ class Graph:
         # Configuración SMTP
         self.smtp_server = os.getenv('SMTP_SERVER')
         self.smtp_port = int(os.getenv('SMTP_PORT', 25))
-        self.smtp_email = os.getenv('SMTP_EMAIL_SEND')
+        self.smtp_email = os.getenv('SMTP_EMAIL_SEND', 'tic@avantika.com.co')
+        
+        # Validar que smtp_email no sea None
+        if not self.smtp_email:
+            self.smtp_email = 'tic@avantika.com.co'
 
     # Función para generar HTML con tablas agrupadas
     def generar_html_tablas(self, datos_dian, datos_dms):

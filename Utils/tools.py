@@ -129,6 +129,10 @@ class Tools:
             mail_sender (str, optional): Correo del remitente
             attachments (list, optional): Lista de diccionarios con 'nombre' (str) y 'contenido' (bytes)
         """
+        
+        # Validar que mail_sender no sea None
+        if not mail_sender:
+            mail_sender = os.getenv('SMTP_EMAIL_SEND', 'tic@avantika.com.co')
 
         msg = MIMEMultipart()
         msg['From'] = mail_sender

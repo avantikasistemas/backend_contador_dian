@@ -3,11 +3,13 @@ version: '3.8'
 services:
   backend:
     build:
-      context: https://github.com/avantikasistemas/backend_verificacion_st.git#master
+      context: https://github.com/avantikasistemas/backend_contador_dian.git#master
       dockerfile: Dockerfile
-    container_name: plan-ventas-backend
+    container_name: contador-dian-backend
     ports:
-      - "8011:8011"
+      - "8012:8012"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - DRIVER=${DRIVER}
       - DB_USER=${DB_USER}
@@ -18,19 +20,22 @@ services:
       - ENCRYPT=${ENCRYPT}
       - TRUST_CERTIFICATE=${TRUST_CERTIFICATE}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SMTP_SERVER=${SMTP_SERVER}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_EMAIL_SENDER=${SMTP_EMAIL_SENDER}
     networks:
       - app-network
     restart: unless-stopped
 
   frontend:
     build:
-      context: https://github.com/avantikasistemas/frontend_verificacion_st.git#master
+      context: https://github.com/avantikasistemas/frontend_contador_dian.git#master
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=http://130.1.1.7:8011
-    container_name: plan-ventas-frontend
+        - VITE_API_URL=http://130.1.1.7:8012
+    container_name: contador-dian-frontend
     ports:
-      - "5186:80"
+      - "5187:80"
     depends_on:
       - backend
     networks:
